@@ -119,3 +119,93 @@ This ensures the backend is always compiled and type-checked with the correct No
 
 ### Result
 The red lines in `server.ts` are resolved. The frontend and backend now have fully isolated TypeScript configurations suited to their respective environments.
+
+---
+
+## Login Page Fixes
+
+### Fix 1: Password Input Pre-filled with Placeholder Text
+
+#### What Was Wrong
+The `passwordInput` state in `src/App.tsx` was initialized with the string `"••••••••"`:
+```typescript
+// ❌ Before
+const [passwordInput, setPasswordInput] = useState("••••••••");
+```
+This meant the actual bullet characters were set as the value of the password field, not just visual placeholder text. A user clicking the field would need to manually clear it before typing their real password — a confusing UX issue.
+
+#### Fix Applied
+Changed the initial value to an empty string:
+```typescript
+// ✅ After
+const [passwordInput, setPasswordInput] = useState("");
+```
+The HTML `placeholder` attribute on the `<input>` already shows `"••••••••"` as greyed-out hint text when the field is empty, so the visual experience is identical — but now the field is actually empty and ready to type into immediately.
+
+---
+
+### Fix 2: Social Login Buttons Wired to Real OAuth
+
+#### What Was Wrong
+Both social login buttons (Google and Apple) were fake bypasses that skipped authentication entirely:
+```typescript
+// ❌ Before — no real auth, just forced the user in
+onClick={() => setUser((p) => ({ ...p, loggedIn: true }))}
+```
+This meant any user could click them and gain access without a real identity.
+
+The "Create an account" link in the footer had the same problem — it also bypassed auth.
+
+#### Fix Applied
+
+**Replaced Apple with Microsoft** (Apple OAuth requires a paid Apple Developer account; Microsoft/Azure is freely available).
+
+**Added `handleOAuthLogin` function** in `src/App.tsx`:
+```typescript
+const handleOAuthLogin = async (provider: 'google' | 'azure') => {
+  const key = provider === 'azure' ? 'microsoft' : 'google';
+  setIsOAuthLoading(key);
+  setAuthMessage(null);
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw error;
+    // Browser redirects to provider — onAuthStateChange handles the rest
+  } catch (error: any) {
+    setAuthMessage({ type: 'error', text: error.message || `${key} sign-in failed` });
+    setIsOAuthLoading(null);
+  }
+};
+```
+
+**Added `isOAuthLoading` state** to show a per-button spinner while redirecting and disable both buttons to prevent double-clicks:
+```typescript
+const [isOAuthLoading, setIsOAuthLoading] = useState<'google' | 'microsoft' | null>(null);
+```
+
+**Fixed "Create an account" footer link** to properly switch to the Sign Up form instead of bypassing auth:
+```typescript
+// ✅ After
+onClick={() => { setIsSignUp(true); setAuthMessage(null); }}
+```
+
+#### How the OAuth Flow Works
+1. User clicks **Google** or **Microsoft**
+2. Button shows spinner; the other button is disabled
+3. `supabase.auth.signInWithOAuth()` redirects the browser to the provider's consent screen
+4. After the user approves, the provider redirects back to `window.location.origin` (your app)
+5. The existing `onAuthStateChange` listener in `useEffect` detects the new session and sets `loggedIn: true` automatically
+
+#### ⚠️ Required Supabase Dashboard Setup (One-Time)
+The code is complete, but these providers must be enabled in the Supabase dashboard before they will work:
+
+| Step | Location | Action |
+|---|---|---|
+| 1 | supabase.com → Project → **Authentication → Providers** | Enable **Google**, paste Client ID & Secret from [console.cloud.google.com](https://console.cloud.google.com) |
+| 2 | Same page | Enable **Azure (Microsoft)**, paste Client ID & Secret from [portal.azure.com](https://portal.azure.com) |
+| 3 | supabase.com → Project → **Authentication → URL Configuration** | Add `http://localhost:5173` to **Redirect URLs** |
+
+### Result
+Both OAuth buttons now trigger real Supabase provider authentication. The password field is empty by default. The "Create an account" link correctly opens the Sign Up form. Authentication can no longer be bypassed from the login screen.

@@ -58,6 +58,7 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState<'google' | 'microsoft' | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authMessage, setAuthMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
 
@@ -149,6 +150,26 @@ export default function App() {
       setAuthMessage({ type: 'error', text: error.message || 'Authentication failed' });
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  // OAuth Login handler
+  const handleOAuthLogin = async (provider: 'google' | 'azure') => {
+    const key = provider === 'azure' ? 'microsoft' : 'google';
+    setIsOAuthLoading(key);
+    setAuthMessage(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      // Browser will redirect — no further action needed here
+    } catch (error: any) {
+      setAuthMessage({ type: 'error', text: error.message || `${key} sign-in failed` });
+      setIsOAuthLoading(null);
     }
   };
 
@@ -462,38 +483,50 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              {/* Google OAuth Button */}
               <button
-                onClick={() => setUser((p) => ({ ...p, loggedIn: true }))}
-                className="flex items-center justify-center gap-2 py-2.5 border border-[#c3c6d7] rounded-xl hover:bg-[#f0f3ff] active:scale-95 transition-all text-sm font-semibold text-[#111c2d]"
+                type="button"
+                onClick={() => handleOAuthLogin('google')}
+                disabled={isOAuthLoading !== null}
+                className="flex items-center justify-center gap-2 py-2.5 border border-[#c3c6d7] rounded-xl hover:bg-[#f0f3ff] active:scale-95 transition-all text-sm font-semibold text-[#111c2d] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
+                {isOAuthLoading === 'google' ? (
+                  <svg className="animate-spin h-4 w-4 text-[#4285F4]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                )}
                 Google
               </button>
+
+              {/* Microsoft OAuth Button */}
               <button
-                onClick={() => setUser((p) => ({ ...p, loggedIn: true }))}
-                className="flex items-center justify-center gap-2 py-2.5 border border-[#c3c6d7] rounded-xl hover:bg-[#f0f3ff] active:scale-95 transition-all text-sm font-semibold text-[#111c2d]"
+                type="button"
+                onClick={() => handleOAuthLogin('azure')}
+                disabled={isOAuthLoading !== null}
+                className="flex items-center justify-center gap-2 py-2.5 border border-[#c3c6d7] rounded-xl hover:bg-[#f0f3ff] active:scale-95 transition-all text-sm font-semibold text-[#111c2d] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                  <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.06-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.4C4.7 17.15 4.1 11.23 6.64 8.76c1.3-1.28 2.84-1.32 3.8-1.24.96.08 2.05.6 2.88.6 1.06 0 1.76-.56 2.92-.54 1.14.02 2.6.4 3.56 1.8-2.32 1.4-1.94 4.54.4 5.5-.6 1.44-1.34 2.88-3.11 5.4M12.03 7.25c-.2-.02-2.04-.04-2.85-1.24.84-.1 1.94-.64 2.4-1.4.38-.6.54-1.44.44-2.28 1.14.1 2 .78 2.5 1.44.48.64.4 1.66.4 1.66s-1.12.18-2.89-.18Z" />
-                </svg>
-                Apple
+                {isOAuthLoading === 'microsoft' ? (
+                  <svg className="animate-spin h-4 w-4 text-[#00a4ef]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path d="M11.4 2H2v9.4h9.4V2z" fill="#F25022" />
+                    <path d="M22 2h-9.4v9.4H22V2z" fill="#7FBA00" />
+                    <path d="M11.4 12.6H2V22h9.4v-9.4z" fill="#00A4EF" />
+                    <path d="M22 12.6h-9.4V22H22v-9.4z" fill="#FFB900" />
+                  </svg>
+                )}
+                Microsoft
               </button>
             </div>
           </div>
@@ -502,7 +535,7 @@ export default function App() {
             <p className="text-sm text-[#434655]">
               New to EduFlow AI?{" "}
               <button
-                onClick={() => setUser((p) => ({ ...p, loggedIn: true }))}
+                onClick={() => { setIsSignUp(true); setAuthMessage(null); }}
                 className="text-[#004ac6] font-bold hover:underline ml-1"
               >
                 Create an account
