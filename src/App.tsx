@@ -35,6 +35,7 @@ import Header from "./components/Header";
 import Navigation from "./components/Navigation";
 import RadarChart from "./components/RadarChart";
 import LineChart from "./components/LineChart";
+import { supabase } from "./supabaseClient";
 
 
 export default function App() {
@@ -54,9 +55,29 @@ export default function App() {
 
   // Login inputs
   const [emailInput, setEmailInput] = useState("alex@university.edu");
-  const [passwordInput, setPasswordInput] = useState("••••••••");
+  const [passwordInput, setPasswordInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authMessage, setAuthMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUser((prev) => ({ ...prev, loggedIn: true, email: session.user.email || prev.email }));
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setUser((prev) => ({ ...prev, loggedIn: true, email: session.user.email || prev.email }));
+      } else {
+        setUser((prev) => ({ ...prev, loggedIn: false }));
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Notifications popup state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -101,13 +122,34 @@ export default function App() {
   }, [chatMessages, isAiThinking]);
 
   // Login handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    setTimeout(() => {
-      setUser((prev) => ({ ...prev, loggedIn: true }));
+    setAuthMessage(null);
+
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email: emailInput,
+          password: passwordInput,
+        });
+        
+        if (error) throw error;
+        setAuthMessage({ type: 'success', text: 'Check your email for the confirmation link!' });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: emailInput,
+          password: passwordInput,
+        });
+        
+        if (error) throw error;
+        // The onAuthStateChange listener will automatically log the user in
+      }
+    } catch (error: any) {
+      setAuthMessage({ type: 'error', text: error.message || 'Authentication failed' });
+    } finally {
       setIsLoggingIn(false);
-    }, 1200);
+    }
   };
 
   // Send message to the local tutor experience
@@ -311,6 +353,12 @@ export default function App() {
               </p>
             </div>
 
+            {authMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${authMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {authMessage.text}
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-4">
               {/* Email */}
               <div className="space-y-1">
@@ -384,12 +432,22 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    Log In
+                    {isSignUp ? "Sign Up" : "Log In"}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </form>
+
+            <div className="mt-4 text-center">
+              <button 
+                type="button" 
+                onClick={() => { setIsSignUp(!isSignUp); setAuthMessage(null); }}
+                className="text-sm font-semibold text-[#004ac6] hover:underline"
+              >
+                {isSignUp ? "Already have an account? Log In" : "Need an account? Sign Up"}
+              </button>
+            </div>
 
             {/* Social logins */}
             <div className="relative my-6">
@@ -398,7 +456,7 @@ export default function App() {
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-white px-3 text-[#737686] tracking-wider">
-                  Or login with
+                  Or {isSignUp ? "sign up" : "login"} with
                 </span>
               </div>
             </div>
